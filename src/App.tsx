@@ -40,6 +40,15 @@ function formatDateTime() {
   return d.toLocaleString()
 }
 
+function escapeHtmlText(s: string) {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 function isMacPlatform() {
   return navigator.userAgent.toLowerCase().includes('mac')
 }
@@ -224,6 +233,24 @@ export function App() {
     )
   }
 
+  const html = useMemo(() => {
+    if (activeTab.kind !== 'markdown') return ''
+    return renderMarkdownToSafeHtml(activeTab.content)
+  }, [activeTab.kind, activeTab.content])
+
+  const exportBodyHtml = useMemo(() => {
+    if (activeTab.kind === 'markdown') return html
+    // text：用 <pre> 保留换行
+    return `<pre>${escapeHtmlText(activeTab.content)}</pre>`
+  }, [activeTab.kind, activeTab.content, html])
+
+  const exportAs = async (format: 'html' | 'pdf' | 'word') => {
+    const req = { title: activeTab.name, nameHint: activeTab.name, html: exportBodyHtml }
+    if (format === 'html') await window.electronAPI.exportHtml(req)
+    if (format === 'pdf') await window.electronAPI.exportPdf(req)
+    if (format === 'word') await window.electronAPI.exportWord(req)
+  }
+
   const dispatchToEditor = (fn: (view: EditorView) => void) => {
     const view = editorViewRef.current
     if (!view) return
@@ -244,6 +271,15 @@ export function App() {
         return
       case 'file:saveAs':
         void saveActive(true)
+        return
+      case 'file:exportHtml':
+        void exportAs('html')
+        return
+      case 'file:exportPdf':
+        void exportAs('pdf')
+        return
+      case 'file:exportWord':
+        void exportAs('word')
         return
       case 'file:closeTab':
         closeTab(activeTab.id)
@@ -309,11 +345,6 @@ export function App() {
     return window.electronAPI.onOpenedFiles((files) => addOpenedFiles(files))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  const html = useMemo(() => {
-    if (activeTab.kind !== 'markdown') return ''
-    return renderMarkdownToSafeHtml(activeTab.content)
-  }, [activeTab.kind, activeTab.content])
 
   const selectionInfo = useMemo(() => {
     const view = editorViewRef.current
@@ -422,6 +453,14 @@ export function App() {
                     { label: t(locale, 'new'), onClick: newTab },
                     { label: t(locale, 'open'), onClick: () => void openFiles() },
                     { label: t(locale, 'save'), onClick: () => void saveActive(false) },
+                    {
+                      label: t(locale, 'export'),
+                      children: [
+                        { label: t(locale, 'export.html'), onClick: () => void exportAs('html') },
+                        { label: t(locale, 'export.pdf'), onClick: () => void exportAs('pdf') },
+                        { label: t(locale, 'export.word'), onClick: () => void exportAs('word') }
+                      ]
+                    },
                     { label: t(locale, 'settings'), onClick: () => setShowSettings(true) },
                     { label: t(locale, 'quit'), onClick: () => void window.electronAPI.quit() }
                   ]}
@@ -508,6 +547,14 @@ export function App() {
                   { label: t(locale, 'new'), onClick: newTab },
                   { label: t(locale, 'open'), onClick: () => void openFiles() },
                   { label: t(locale, 'save'), onClick: () => void saveActive(false) },
+                  {
+                    label: t(locale, 'export'),
+                    children: [
+                      { label: t(locale, 'export.html'), onClick: () => void exportAs('html') },
+                      { label: t(locale, 'export.pdf'), onClick: () => void exportAs('pdf') },
+                      { label: t(locale, 'export.word'), onClick: () => void exportAs('word') }
+                    ]
+                  },
                   { label: t(locale, 'settings'), onClick: () => setShowSettings(true) },
                   { label: t(locale, 'quit'), onClick: () => void window.electronAPI.quit() }
                 ]}

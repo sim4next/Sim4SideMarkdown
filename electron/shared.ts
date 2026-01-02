@@ -26,11 +26,28 @@ export type SaveFileResponse = {
   name: string
 }
 
+export type ExportRequest = {
+  // 文档标题（用于 HTML/PDF/Word 顶部 title）
+  title: string
+  // 用于保存对话框默认文件名
+  nameHint?: string
+  // 已经渲染好的 HTML（建议来自 renderer：Markdown -> safe HTML）
+  html: string
+}
+
+export type ExportResponse = {
+  path: string
+  name: string
+}
+
 export type MenuCommand =
   | { type: 'file:new' }
   | { type: 'file:open' }
   | { type: 'file:save' }
   | { type: 'file:saveAs' }
+  | { type: 'file:exportHtml' }
+  | { type: 'file:exportPdf' }
+  | { type: 'file:exportWord' }
   | { type: 'file:closeTab' }
   | { type: 'file:quit' }
   | { type: 'edit:undo' }

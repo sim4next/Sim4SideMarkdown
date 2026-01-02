@@ -405,6 +405,17 @@ body {
   z-index: 50;
 }
 
+.dropdown-menu.submenu {
+  top: 0;
+  left: calc(100% + 6px);
+  right: auto;
+}
+
+.dropdown-menu.submenu.left {
+  left: auto;
+  right: calc(100% + 6px);
+}
+
 .dropdown-item {
   width: 100%;
   text-align: left;
@@ -416,6 +427,19 @@ body {
   padding: 8px 10px;
   cursor: pointer;
   font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dropdown-caret {
+  opacity: 0.6;
+}
+
+.dropdown-item.active {
+  background: color-mix(in oklab, var(--tabActive), var(--accent) 12%);
+  border-color: color-mix(in oklab, var(--border), var(--accent) 25%);
 }
 
 .dropdown-item:hover {
