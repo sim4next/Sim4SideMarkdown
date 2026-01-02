@@ -1,10 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { AppSettings, MenuCommand, OpenedFile, SaveFileRequest, SaveFileResponse } from './shared'
+import type { AppSettings, ExportRequest, ExportResponse, MenuCommand, OpenedFile, SaveFileRequest, SaveFileResponse } from './shared'
 
 export type ElectronAPI = {
   openFiles: () => Promise<OpenedFile[]>
   saveFile: (req: SaveFileRequest) => Promise<SaveFileResponse | null>
   saveFileAs: (req: SaveFileRequest) => Promise<SaveFileResponse | null>
+  exportHtml: (req: ExportRequest) => Promise<ExportResponse | null>
+  exportPdf: (req: ExportRequest) => Promise<ExportResponse | null>
+  exportWord: (req: ExportRequest) => Promise<ExportResponse | null>
   quit: () => Promise<void>
   onMenuCommand: (handler: (cmd: MenuCommand) => void) => () => void
   onOpenedFiles: (handler: (files: OpenedFile[]) => void) => () => void
@@ -30,6 +33,9 @@ const api: ElectronAPI = {
   openFiles: () => ipcRenderer.invoke('fs:openFiles'),
   saveFile: (req) => ipcRenderer.invoke('fs:saveFile', req),
   saveFileAs: (req) => ipcRenderer.invoke('fs:saveFileAs', req),
+  exportHtml: (req) => ipcRenderer.invoke('export:html', req),
+  exportPdf: (req) => ipcRenderer.invoke('export:pdf', req),
+  exportWord: (req) => ipcRenderer.invoke('export:word', req),
   quit: () => ipcRenderer.invoke('app:quit'),
   onMenuCommand: (handler) => {
     const listener = (_evt: Electron.IpcRendererEvent, cmd: MenuCommand) => handler(cmd)

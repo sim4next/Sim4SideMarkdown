@@ -4,6 +4,11 @@ export type I18nKey =
   | 'new'
   | 'open'
   | 'save'
+  | 'export'
+  | 'export.html'
+  | 'export.pdf'
+  | 'export.word'
+  | 'back'
   | 'menu'
   | 'quit'
   | 'settings'
@@ -29,6 +34,11 @@ const dict: Record<Locale, Record<I18nKey, string>> = {
     new: '新建',
     open: '打开',
     save: '保存',
+    export: '导出',
+    'export.html': '导出为 HTML',
+    'export.pdf': '导出为 PDF',
+    'export.word': '导出为 Word（.doc）',
+    back: '返回',
     menu: '菜单',
     quit: '退出',
     settings: '设置',
@@ -53,6 +63,11 @@ const dict: Record<Locale, Record<I18nKey, string>> = {
     new: '新增',
     open: '打開',
     save: '儲存',
+    export: '匯出',
+    'export.html': '匯出為 HTML',
+    'export.pdf': '匯出為 PDF',
+    'export.word': '匯出為 Word（.doc）',
+    back: '返回',
     menu: '選單',
     quit: '退出',
     settings: '設定',
@@ -77,6 +92,11 @@ const dict: Record<Locale, Record<I18nKey, string>> = {
     new: 'New',
     open: 'Open',
     save: 'Save',
+    export: 'Export',
+    'export.html': 'Export as HTML',
+    'export.pdf': 'Export as PDF',
+    'export.word': 'Export as Word (.doc)',
+    back: 'Back',
     menu: 'Menu',
     quit: 'Quit',
     settings: 'Settings',
@@ -101,6 +121,11 @@ const dict: Record<Locale, Record<I18nKey, string>> = {
     new: '新規',
     open: '開く',
     save: '保存',
+    export: 'エクスポート',
+    'export.html': 'HTML にエクスポート',
+    'export.pdf': 'PDF にエクスポート',
+    'export.word': 'Word（.doc）にエクスポート',
+    back: '戻る',
     menu: 'メニュー',
     quit: '終了',
     settings: '設定',
@@ -125,6 +150,11 @@ const dict: Record<Locale, Record<I18nKey, string>> = {
     new: '새로 만들기',
     open: '열기',
     save: '저장',
+    export: '내보내기',
+    'export.html': 'HTML로 내보내기',
+    'export.pdf': 'PDF로 내보내기',
+    'export.word': 'Word(.doc)로 내보내기',
+    back: '뒤로',
     menu: '메뉴',
     quit: '종료',
     settings: '설정',

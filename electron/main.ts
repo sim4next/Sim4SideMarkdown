@@ -7,6 +7,8 @@ import {
   APP_TITLE,
   type AppSettings,
   type EncodingName,
+  type ExportRequest,
+  type ExportResponse,
   type MenuCommand,
   type OpenedFile,
   type SaveFileRequest,
@@ -144,6 +146,220 @@ async function saveFileWithDialog(win: BrowserWindow, req: SaveFileRequest, forc
   }
 }
 
+function safeFileStem(nameHint?: string) {
+  const raw = (nameHint ?? '').trim()
+  if (!raw) return 'Untitled'
+  // 只取文件名部分，避免 defaultPath 带入意外路径
+  const base = path.basename(raw)
+  // 去掉最后一个扩展名
+  return base.replace(/\.[^./\\]+$/, '') || 'Untitled'
+}
+
+function escapeHtmlText(s: string) {
+  return s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+function makeExportHtmlDocument(title: string, bodyHtml: string) {
+  const safeTitle = escapeHtmlText(title || APP_TITLE)
+  // 注意：bodyHtml 由 renderer 生成（已 sanitize），这里不再二次转义
+  return `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${safeTitle}</title>
+    <style>
+      :root { color-scheme: light; }
+      body {
+        margin: 0;
+        background: #fff;
+        color: #111827;
+        font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial;
+        line-height: 1.6;
+      }
+      .doc {
+        max-width: 900px;
+        margin: 0 auto;
+        padding: 28px 22px 40px;
+      }
+      h1,h2,h3,h4,h5,h6 { line-height: 1.25; margin: 1.1em 0 0.55em; }
+      p { margin: 0.65em 0; }
+      img { max-width: 100%; height: auto; }
+      a { color: #2563eb; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      blockquote {
+        margin: 0.9em 0;
+        padding: 0.2em 1em;
+        border-left: 4px solid #e5e7eb;
+        color: #374151;
+        background: #f9fafb;
+      }
+      hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.2em 0; }
+      table { border-collapse: collapse; width: 100%; margin: 0.9em 0; }
+      th, td { border: 1px solid #e5e7eb; padding: 8px 10px; vertical-align: top; }
+      th { background: #f3f4f6; text-align: left; }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 0.95em;
+        background: #f3f4f6;
+        padding: 0.15em 0.35em;
+        border-radius: 6px;
+      }
+      pre {
+        overflow: auto;
+        padding: 12px 14px;
+        background: #0b1220;
+        color: #e5e7eb;
+        border-radius: 10px;
+      }
+      pre code { background: transparent; padding: 0; color: inherit; }
+      @media print {
+        .doc { max-width: none; padding: 0; }
+        a { color: #111827; text-decoration: underline; }
+        pre { break-inside: avoid; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="doc">
+      ${bodyHtml}
+    </main>
+  </body>
+</html>`
+}
+
+function makeWordHtmlDocument(title: string, bodyHtml: string) {
+  // Word 兼容：使用 .doc（HTML）即可直接打开；避免额外依赖生成 docx
+  const safeTitle = escapeHtmlText(title || APP_TITLE)
+  return `<!doctype html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word">
+  <head>
+    <meta charset="utf-8" />
+    <title>${safeTitle}</title>
+    <xml>
+      <w:WordDocument>
+        <w:View>Print</w:View>
+        <w:Zoom>100</w:Zoom>
+      </w:WordDocument>
+    </xml>
+    <style>
+      body { font-family: "Microsoft YaHei", "PingFang SC", ui-sans-serif, system-ui; line-height: 1.6; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { border: 1px solid #999; padding: 6px 8px; vertical-align: top; }
+      code, pre { font-family: Consolas, Menlo, Monaco, monospace; }
+      pre { white-space: pre-wrap; }
+    </style>
+  </head>
+  <body>
+    ${bodyHtml}
+  </body>
+</html>`
+}
+
+async function exportHtmlWithDialog(win: BrowserWindow, req: ExportRequest): Promise<ExportResponse | null> {
+  const stem = safeFileStem(req.nameHint ?? req.title)
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: '导出为 HTML',
+    defaultPath: `${stem}.html`,
+    filters: [
+      { name: 'HTML', extensions: ['html', 'htm'] },
+      { name: '所有文件', extensions: ['*'] }
+    ]
+  })
+  if (canceled || !filePath) return null
+
+  try {
+    const doc = makeExportHtmlDocument(req.title || stem, req.html)
+    await fs.writeFile(filePath, doc, 'utf8')
+    return { path: filePath, name: path.basename(filePath) }
+  } catch (err) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      title: '导出失败',
+      message: `无法导出 HTML：${filePath}`,
+      detail: err instanceof Error ? err.message : String(err)
+    })
+    return null
+  }
+}
+
+async function exportWordWithDialog(win: BrowserWindow, req: ExportRequest): Promise<ExportResponse | null> {
+  const stem = safeFileStem(req.nameHint ?? req.title)
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: '导出为 Word',
+    defaultPath: `${stem}.doc`,
+    filters: [
+      { name: 'Word 文档（.doc）', extensions: ['doc'] },
+      { name: '所有文件', extensions: ['*'] }
+    ]
+  })
+  if (canceled || !filePath) return null
+
+  try {
+    const doc = makeWordHtmlDocument(req.title || stem, req.html)
+    await fs.writeFile(filePath, doc, 'utf8')
+    return { path: filePath, name: path.basename(filePath) }
+  } catch (err) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      title: '导出失败',
+      message: `无法导出 Word：${filePath}`,
+      detail: err instanceof Error ? err.message : String(err)
+    })
+    return null
+  }
+}
+
+async function exportPdfWithDialog(win: BrowserWindow, req: ExportRequest): Promise<ExportResponse | null> {
+  const stem = safeFileStem(req.nameHint ?? req.title)
+  const { canceled, filePath } = await dialog.showSaveDialog(win, {
+    title: '导出为 PDF',
+    defaultPath: `${stem}.pdf`,
+    filters: [
+      { name: 'PDF', extensions: ['pdf'] },
+      { name: '所有文件', extensions: ['*'] }
+    ]
+  })
+  if (canceled || !filePath) return null
+
+  const htmlDoc = makeExportHtmlDocument(req.title || stem, req.html)
+  const exportWin = new BrowserWindow({
+    show: false,
+    backgroundColor: '#ffffff',
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  })
+  try {
+    await exportWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(htmlDoc)}`)
+    // 给排版/字体一点时间（更稳）
+    await new Promise((r) => setTimeout(r, 50))
+    const pdf = await exportWin.webContents.printToPDF({
+      printBackground: true,
+      preferCSSPageSize: true
+    })
+    await fs.writeFile(filePath, pdf)
+    return { path: filePath, name: path.basename(filePath) }
+  } catch (err) {
+    await dialog.showMessageBox(win, {
+      type: 'error',
+      title: '导出失败',
+      message: `无法导出 PDF：${filePath}`,
+      detail: err instanceof Error ? err.message : String(err)
+    })
+    return null
+  } finally {
+    exportWin.destroy()
+  }
+}
+
 function buildAppMenu(winGetter: () => BrowserWindow | null) {
   const accel = (win: string, mac: string) => (isMac ? mac : win)
 
@@ -178,6 +394,15 @@ function buildAppMenu(winGetter: () => BrowserWindow | null) {
         { type: 'separator' },
         { label: '保存', accelerator: accel('Ctrl+S', 'Cmd+S'), click: () => sendMenuCommand(winGetter(), { type: 'file:save' }) },
         { label: '另存为…', accelerator: accel('Ctrl+Shift+S', 'Cmd+Shift+S'), click: () => sendMenuCommand(winGetter(), { type: 'file:saveAs' }) },
+        { type: 'separator' },
+        {
+          label: '导出',
+          submenu: [
+            { label: 'HTML…', click: () => sendMenuCommand(winGetter(), { type: 'file:exportHtml' }) },
+            { label: 'PDF…', click: () => sendMenuCommand(winGetter(), { type: 'file:exportPdf' }) },
+            { label: 'Word（.doc）…', click: () => sendMenuCommand(winGetter(), { type: 'file:exportWord' }) }
+          ]
+        },
         { type: 'separator' },
         { label: '关闭标签页', accelerator: accel('Ctrl+W', 'Cmd+W'), click: () => sendMenuCommand(winGetter(), { type: 'file:closeTab' }) },
         { type: 'separator' },
@@ -761,6 +986,22 @@ app.whenReady().then(async () => {
   ipcMain.handle('fs:saveFileAs', async (_evt, req: SaveFileRequest) => {
     if (!mainWindow) return null
     return await saveFileWithDialog(mainWindow, req, true)
+  })
+
+  // ===== Export =====
+  ipcMain.handle('export:html', async (_evt, req: ExportRequest) => {
+    if (!mainWindow) return null
+    return await exportHtmlWithDialog(mainWindow, req)
+  })
+
+  ipcMain.handle('export:word', async (_evt, req: ExportRequest) => {
+    if (!mainWindow) return null
+    return await exportWordWithDialog(mainWindow, req)
+  })
+
+  ipcMain.handle('export:pdf', async (_evt, req: ExportRequest) => {
+    if (!mainWindow) return null
+    return await exportPdfWithDialog(mainWindow, req)
   })
 
   ipcMain.handle('app:quit', async () => {
