@@ -12,6 +12,8 @@ import { WindowControls } from './components/WindowControls'
 import { DockButtons } from './components/DockButtons'
 import { SettingsDialog } from './components/SettingsDialog'
 import { TitlebarDropdown } from './components/TitlebarDropdown'
+import { PanelToggleButtons } from './components/PanelToggleButtons'
+import { TocPane, type TocItem } from './components/TocPane'
 import { renderMarkdownToSafeHtml } from './markdown'
 import { t } from './i18n'
 
@@ -73,7 +75,9 @@ export function App() {
   const [activeId, setActiveId] = useState<string>(() => tabs[0]!.id)
   const [wordWrap, setWordWrap] = useState(true)
   const [showStatusBar, setShowStatusBar] = useState(true)
-  const [previewMode, setPreviewMode] = useState<PreviewMode>('split')
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('edit')
+  const [showToc, setShowToc] = useState(true)
+  const [pendingJump, setPendingJump] = useState<TocItem | null>(null)
   const [font, setFont] = useState<EditorFont>({
     family: 'ui-monospace',
     sizePx: 14,
@@ -100,6 +104,20 @@ export function App() {
   useEffect(() => {
     return window.electronAPI.onWindowDockMode((mode) => setDockMode(mode))
   }, [])
+
+  useEffect(() => {
+    // 贴边模式：只显示 editor（不显示目录/预览，也不显示右上角切换按钮）
+    if (dockMode !== 'center') {
+      setShowToc(false)
+      setPendingJump(null)
+      setPreviewMode('edit')
+    } else {
+      // 切回居中模式：默认显示「目录 + editor」
+      setShowToc(true)
+      setPendingJump(null)
+      setPreviewMode('edit')
+    }
+  }, [dockMode])
 
   useEffect(() => {
     // theme: light/dark/system -> CSS variables
@@ -305,8 +323,69 @@ export function App() {
     return { line: line.number, col: pos - line.from + 1, lines: view.state.doc.lines }
   }, [activeTab.content])
 
-  const showPreview = activeTab.kind === 'markdown' && (previewMode === 'preview' || previewMode === 'split')
-  const showEditor = previewMode === 'edit' || previewMode === 'split' || activeTab.kind !== 'markdown'
+  const isMarkdown = activeTab.kind === 'markdown'
+  const editorVisible = !isMarkdown || previewMode === 'edit' || previewMode === 'split'
+  const previewVisible = isMarkdown && (previewMode === 'preview' || previewMode === 'split')
+
+  const applyPreviewMode = (nextEditor: boolean, nextPreview: boolean) => {
+    // 防止全关导致空白：至少保留一个面板
+    if (!nextEditor && !nextPreview) nextEditor = true
+    setPreviewMode(nextEditor && nextPreview ? 'split' : nextEditor ? 'edit' : 'preview')
+  }
+
+  const jumpPreviewToHeading = (item: TocItem) => {
+    const root = document.querySelector('.preview-pane') as HTMLElement | null
+    if (!root) return
+    const wantedTag = `H${item.depth}`
+    const all = Array.from(root.querySelectorAll('h1,h2,h3,h4,h5,h6')) as HTMLElement[]
+    let count = 0
+    for (const el of all) {
+      if (el.tagName !== wantedTag) continue
+      if ((el.textContent ?? '').trim() !== item.text) continue
+      count += 1
+      if (count === item.ordinal) {
+        el.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        return
+      }
+    }
+  }
+
+  const jumpEditorToLine = (line1: number) => {
+    dispatchToEditor((v) => {
+      const safe = Math.max(1, Math.min(line1, v.state.doc.lines))
+      const line = v.state.doc.line(safe)
+      v.dispatch({ selection: { anchor: line.from }, scrollIntoView: true })
+    })
+  }
+
+  const jumpToHeading = (item: TocItem) => {
+    // 目录点击：强制让右侧是「编辑器+预览」同时可见，然后两边一起跳转
+    if (!isMarkdown) return
+    setPendingJump(item)
+    if (previewMode !== 'split') setPreviewMode('split')
+  }
+
+  useEffect(() => {
+    if (!pendingJump) return
+    if (!isMarkdown) {
+      setPendingJump(null)
+      return
+    }
+
+    // 等到 split 生效（确保 editor + preview 都存在）
+    if (previewMode !== 'split') return
+
+    jumpEditorToLine(pendingJump.line1)
+
+    // 预览 DOM 在切换模式/重新渲染后可能还没就绪：多等一帧更稳
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        jumpPreviewToHeading(pendingJump)
+        setPendingJump(null)
+      })
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingJump, previewMode, isMarkdown, html])
 
   return (
     <div className="app">
@@ -342,6 +421,7 @@ export function App() {
                   items={[
                     { label: t(locale, 'new'), onClick: newTab },
                     { label: t(locale, 'open'), onClick: () => void openFiles() },
+                    { label: t(locale, 'save'), onClick: () => void saveActive(false) },
                     { label: t(locale, 'settings'), onClick: () => setShowSettings(true) },
                     { label: t(locale, 'quit'), onClick: () => void window.electronAPI.quit() }
                   ]}
@@ -420,21 +500,18 @@ export function App() {
             </div>
 
             <div className="titlebar-right">
-              <button className="btn no-drag" onClick={newTab}>
-                {t(locale, 'new')}
-              </button>
-              <button className="btn no-drag" onClick={() => void openFiles()}>
-                {t(locale, 'open')}
-              </button>
-              <button className="btn no-drag" onClick={() => void saveActive(false)}>
-                {t(locale, 'save')}
-              </button>
-
-              <button className="btn no-drag" onClick={() => setShowSettings(true)}>
-                {t(locale, 'settings')}
-              </button>
-
               <DockButtons mode={dockMode} />
+
+              <TitlebarDropdown
+                buttonLabel={t(locale, 'menu')}
+                items={[
+                  { label: t(locale, 'new'), onClick: newTab },
+                  { label: t(locale, 'open'), onClick: () => void openFiles() },
+                  { label: t(locale, 'save'), onClick: () => void saveActive(false) },
+                  { label: t(locale, 'settings'), onClick: () => setShowSettings(true) },
+                  { label: t(locale, 'quit'), onClick: () => void window.electronAPI.quit() }
+                ]}
+              />
 
               {!isMac ? <WindowControls /> : null}
             </div>
@@ -443,38 +520,85 @@ export function App() {
       </div>
 
       <div className="content">
-        {activeTab.kind === 'markdown' && previewMode === 'split' ? (
-          <div className="split">
-            <div className="pane">
-              <div className="editor-shell">
-                <div className="editor-side-toolbar">
-                  <MarkdownToolbar view={editorViewRef.current} layout="vertical" variant="icon" />
+        {dockMode === 'center' ? (
+          <>
+            <PanelToggleButtons
+              kind={activeTab.kind}
+              tocVisible={isMarkdown && showToc}
+              editorVisible={editorVisible}
+              previewVisible={previewVisible}
+              onToggleToc={() => {
+                if (!isMarkdown) return
+                setShowToc((x) => !x)
+              }}
+              onToggleEditor={() => {
+                if (!isMarkdown) return
+                applyPreviewMode(!editorVisible, previewVisible)
+              }}
+              onTogglePreview={() => {
+                if (!isMarkdown) return
+                applyPreviewMode(editorVisible, !previewVisible)
+              }}
+            />
+
+            {(() => {
+              const panes: React.ReactNode[] = []
+
+              if (isMarkdown && showToc) {
+                panes.push(
+                  <div key="toc" className="pane">
+                    <TocPane markdown={activeTab.content} onJump={jumpToHeading} />
+                  </div>
+                )
+              }
+
+              if (editorVisible) {
+                panes.push(
+                  <div key="editor" className="pane">
+                    <div className="editor-shell">
+                      {isMarkdown ? (
+                        <div className="editor-side-toolbar">
+                          <MarkdownToolbar view={editorViewRef.current} layout="vertical" variant="icon" />
+                        </div>
+                      ) : null}
+                      <div className="editor-host">
+                        <EditorPane
+                          kind={activeTab.kind}
+                          value={activeTab.content}
+                          wordWrap={wordWrap}
+                          onViewReady={(v) => (editorViewRef.current = v)}
+                          onChange={(next) =>
+                            setTabs((prev) =>
+                              prev.map((x) => (x.id === activeTab.id ? { ...x, content: next, dirty: true } : x))
+                            )
+                          }
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )
+              }
+
+              if (previewVisible) {
+                panes.push(
+                  <div key="preview" className="pane preview preview-pane" dangerouslySetInnerHTML={{ __html: html }} />
+                )
+              }
+
+              // grid columns: TOC 固定宽度，其余等分
+              const template = panes.map((_, i) => (isMarkdown && showToc && i === 0 ? '240px' : '1fr')).join(' ')
+
+              return (
+                <div className="split" style={{ gridTemplateColumns: template }}>
+                  {panes}
                 </div>
-                <div className="editor-host">
-                  <EditorPane
-                    kind={activeTab.kind}
-                    value={activeTab.content}
-                    wordWrap={wordWrap}
-                    onViewReady={(v) => (editorViewRef.current = v)}
-                    onChange={(next) =>
-                      setTabs((prev) =>
-                        prev.map((x) => (x.id === activeTab.id ? { ...x, content: next, dirty: true } : x))
-                      )
-                    }
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="pane preview" dangerouslySetInnerHTML={{ __html: html }} />
-          </div>
-        ) : showEditor ? (
+              )
+            })()}
+          </>
+        ) : (
+          // 贴边模式：只显示 editor
           <div className="pane">
             <div className="editor-shell">
-              {activeTab.kind === 'markdown' ? (
-                <div className="editor-side-toolbar">
-                  <MarkdownToolbar view={editorViewRef.current} layout="vertical" variant="icon" />
-                </div>
-              ) : null}
               <div className="editor-host">
                 <EditorPane
                   kind={activeTab.kind}
@@ -490,8 +614,6 @@ export function App() {
               </div>
             </div>
           </div>
-        ) : (
-          <div className="pane preview" dangerouslySetInnerHTML={{ __html: html }} />
         )}
       </div>
 
