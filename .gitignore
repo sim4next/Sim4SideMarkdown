@@ -6,5 +6,4 @@ release
 *.log
 .idea
 .vscode
-
-
+.vite
