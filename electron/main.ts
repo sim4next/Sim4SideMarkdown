@@ -522,7 +522,24 @@ function menuLabel(locale: Locale, key: 'file' | 'new' | 'open' | 'save' | 'save
 
 function isUpdaterEnabled() {
   // electron-updater 仅在“打包后的应用”中可靠工作；dev 模式禁用
-  return app.isPackaged
+  // Mac App Store (mas) 的更新由系统 App Store 托管，不走 electron-updater。
+  return app.isPackaged && !isMasBuild()
+}
+
+function isMasBuild() {
+  // Electron 在 mas 构建中会注入 process.mas（TS 类型可能未声明，做一次兜底）。
+  return Boolean((process as unknown as { mas?: boolean }).mas)
+}
+
+async function openMacAppStoreUpdatesPage() {
+  // macOS App Store 的更新页（系统托管更新）
+  // ref: macappstore:// URL scheme
+  try {
+    await shell.openExternal('macappstore://showUpdatesPage')
+  } catch {
+    // fallback
+    await shell.openExternal('https://apps.apple.com')
+  }
 }
 
 function formatError(err: unknown) {
@@ -591,11 +608,32 @@ function syncUpdateMenuState() {
   const verItem = menu.getMenuItemById('help.version')
   if (verItem) {
     verItem.label = getUpdateMenuLabel(appSettings.locale)
-    verItem.enabled = updateState.status !== 'unsupported'
+    // mas 构建下允许点击（跳转到 App Store 更新页），非 mas 则按 updater 状态控制。
+    verItem.enabled = isMasBuild() ? true : updateState.status !== 'unsupported'
   }
 }
 
 async function checkForUpdates(opts?: { silent?: boolean }) {
+  if (isMasBuild()) {
+    setUpdateState({
+      status: 'unsupported',
+      currentVersion: app.getVersion(),
+      error: 'Mac App Store builds are updated via App Store.'
+    })
+    if (!opts?.silent && mainWindow && !mainWindow.isDestroyed()) {
+      const { response } = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: '检查更新',
+        message: '此版本来自 Mac App Store。',
+        detail: '更新由系统 App Store 托管。你可以在 App Store 的“更新”页安装最新版本（也可开启系统自动更新）。',
+        buttons: ['打开 App Store 更新页', '确定'],
+        defaultId: 0,
+        cancelId: 1
+      })
+      if (response === 0) await openMacAppStoreUpdatesPage()
+    }
+    return updateState
+  }
   if (!isUpdaterEnabled()) {
     setUpdateState({
       status: 'unsupported',
@@ -634,6 +672,28 @@ async function checkForUpdates(opts?: { silent?: boolean }) {
 }
 
 async function startUpdate() {
+  if (isMasBuild()) {
+    setUpdateState({
+      status: 'unsupported',
+      currentVersion: app.getVersion(),
+      error: 'Mac App Store builds are updated via App Store.'
+    })
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      const { response } = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: '更新',
+        message: '此版本来自 Mac App Store。',
+        detail: '更新由系统 App Store 托管。点击“打开”前往 App Store 更新页。',
+        buttons: ['打开', '取消'],
+        defaultId: 0,
+        cancelId: 1
+      })
+      if (response === 0) await openMacAppStoreUpdatesPage()
+    } else {
+      await openMacAppStoreUpdatesPage()
+    }
+    return updateState
+  }
   if (!isUpdaterEnabled()) {
     setUpdateState({
       status: 'unsupported',
@@ -681,6 +741,15 @@ async function startUpdate() {
 
 function initAutoUpdater() {
   setUpdateState({ status: 'idle', currentVersion: app.getVersion(), availableVersion: undefined, error: undefined, progress: undefined })
+  if (isMasBuild()) {
+    // mas 版本更新由系统托管，不初始化 electron-updater
+    setUpdateState({
+      status: 'unsupported',
+      currentVersion: app.getVersion(),
+      error: 'Mac App Store builds are updated via App Store.'
+    })
+    return
+  }
   if (!isUpdaterEnabled()) {
     setUpdateState({
       status: 'unsupported',
@@ -2132,6 +2201,10 @@ app.whenReady().then(async () => {
   })
 
   ipcMain.handle('update:quitAndInstall', async () => {
+    if (isMasBuild()) {
+      await openMacAppStoreUpdatesPage()
+      return
+    }
     updateInstallRequested = true
     autoUpdater.quitAndInstall()
   })

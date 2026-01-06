@@ -1,6 +1,16 @@
-## SIde Markdown
+## Side Markdown
 
-A desktop text/Markdown editor with **multi tabs**, **live Markdown preview (split view)**, **cross-platform menus & shortcuts**, and **common text encodings** (UTF-8 / UTF-16LE / GBK / GB18030 / ANSI Win-1252). Built and packaged with **electron-builder** for Windows and macOS.
+A lightweight desktop **text/Markdown editor** with **multi-tabs**, **live split-view preview**, native-feeling **menus & shortcuts**, and robust **text encoding** support (UTF-8 / UTF-16LE / GBK / GB18030 / ANSI Win-1252). Built with Electron for **Windows** and **macOS**.
+
+### Overview
+
+- **Writing-first editing**: multi-tab workflow, undo/redo, word wrap, status bar, font settings, and insert date/time.
+- **Live Markdown preview**: switch between edit/preview/split modes, syntax highlighting, and synced scrolling between editor and preview.
+- **Fast navigation**: find/replace and go-to-line for long documents and quick fixes.
+- **File & tab management**: new/open (supports multi-select), save/save as, and close tabs.
+- **Better encoding compatibility**: built-in detection plus decode/encode helps handle common Chinese/Windows text files reliably.
+- **Cross-platform consistency**: consistent menu structure and shortcut habits across Windows/macOS.
+- **Built-in auto update (v1.1.0+)**: checks GitHub Releases and installs updates in-app (Windows requires the NSIS installer build).
 
 ### Release notes (v1.1.0)
 
@@ -69,6 +79,15 @@ npm run dist:mac
 
 Artifacts will be in `release/` (`dmg` + `zip`).
 
+#### Mac App Store (MAS) builds
+
+MAS builds are **for App Store submission/testing flows**, not for normal local installation/distribution.
+
+- `npm run dist:mas`: produces a `.pkg` intended to be uploaded via Transporter / App Store Connect.
+  - If you double-click install this `.pkg` locally, macOS Gatekeeper may reject launching the app (common symptom: “应用程序无法打开”).
+- For **local testing**, prefer `npm run dist:mas:dev` (`mas-dev` target), then run the generated `.app` directly (requires a valid **Apple Development** certificate in your Keychain).
+- For **local distribution outside the App Store**, use the `dmg/zip` build (`npm run dist:mac`) and sign/notarize with a **Developer ID Application** certificate.
+
 #### Windows (Win10/11)
 
 ```bash
@@ -128,7 +147,7 @@ npm run dist:win:publish
 
 ![Docked mode](docs/images/preview_3.jpg)
 
-### Features
+### Features (menu-level)
 
 - **File**: New / Open (multi-select) / Save / Save As / Close Tab / Quit
 - **Edit**: Undo/Redo, Cut/Copy/Paste, Select All, Find/Replace, Go to Line, Insert Date/Time

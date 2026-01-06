@@ -20,6 +20,10 @@ release/
 .env.test
 .env.production
 
+# Local env files (non-dot variants; kept out of git)
+env.local
+env.publish.local
+
 # Logs
 *.log
 npm-debug.log*

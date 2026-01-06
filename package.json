@@ -22,7 +22,9 @@
     "dist:mac:apple": "npm run build && npm run clean:release && electron-builder --mac --arm64 -c.electronDist=node_modules/electron/dist",
     "dist:mac:apple:publish": "npm run build && npm run clean:release && electron-builder --mac --arm64 -c.electronDist=node_modules/electron/dist --publish always",
     "dist:mac:intel:publish": "npm run build && npm run clean:release && electron-builder --mac --x64 --publish always",
-    "dist:win:publish": "npm run build && npm run clean:release && electron-builder --win --publish always"
+    "dist:win:publish": "npm run build && npm run clean:release && electron-builder --win --publish always",
+    "dist:mas": "npm run build && npm run clean:release && electron-builder --mac mas -c.electronDist=node_modules/electron/dist",
+    "dist:mas:dev": "npm run build && npm run clean:release && electron-builder --mac mas-dev -c.electronDist=node_modules/electron/dist"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.1",
@@ -110,6 +112,13 @@
     "dmg": {
       "sign": false
     },
+    "mas": {
+      "entitlements": "build/entitlements.mas.plist",
+      "entitlementsInherit": "build/entitlements.mas.inherit.plist",
+      "provisioningProfile": "build/embedded.provisionprofile",
+      "timestamp": "none"
+    },
+    "afterSign": "scripts/notarize.cjs",
     "win": {
       "target": [
         {
