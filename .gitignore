@@ -1,12 +1,33 @@
-node_modules
-dist
-dist-electron
-release
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-electron/
+release/
+
+# Electron dev runtime data (this repo uses app.setPath('userData', '.electron-user-data') in dev)
+.electron-user-data/
+
+# Vite cache
+.vite/
+
+# Env files (keep env.sample tracked)
 .env
 .env.local
-.DS_Store
+.env.*.local
+.env.development
+.env.test
+.env.production
+
+# Logs
 *.log
-.idea
-.vscode
-.vite
-.electron-user-data
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
